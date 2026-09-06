@@ -55,3 +55,7 @@ npm start
 `npm test` runs the embedded game in a DOM simulator, checking geometry, navigation, resource gathering, construction, recruitment, costs, upgrades, raids, combat, and victory/defeat. It does not test GPU rendering or real browser input. `npm run build` validates both inline scripts and copies the complete game into `dist/index.html` for static hosting.
 
 Only the test runner has a development dependency. The game itself remains a single standalone file.
+
+## Deployment
+
+The public GitHub repository is connected to Vercel. Production tracks `main`: pushing to `main` automatically builds and deploys the game. Vercel runs `npm run build` and serves `dist/index.html`; `vercel.json` keeps those settings in the repository.
