@@ -1,0 +1,14 @@
+{
+  "name": "age-of-empires-v-emerald-march",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A self-contained, offline 3D real-time strategy game in one HTML file.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "devDependencies": {
+    "linkedom": "0.18.12"
+  }
+}
