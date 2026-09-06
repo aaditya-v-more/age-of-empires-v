@@ -2,6 +2,8 @@
 
 A playable, unofficial medieval strategy experiment. The entire game—including its 3D engine, artwork, interface, and sound—lives in **`index.html`**. No CDN, asset downloads, server, or internet connection is required to play.
 
+**[Play the game](https://age-of-empires-v.vercel.app)** · [Public source repository](https://github.com/aaditya-v-more/age-of-empires-v)
+
 ## Play
 
 Open `index.html` in a modern browser with WebGL 2 enabled. For a local preview, run `npm start` and open the address it prints. Node.js is only needed for the optional development commands.
