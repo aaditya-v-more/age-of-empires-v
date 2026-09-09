@@ -9,7 +9,7 @@ const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const engine = html.match(/<script id="three-engine">([\s\S]*?)<\/script>/)[1];
 const source = html.match(/<script id="game-code">([\s\S]*?)<\/script>/)[1];
 const errors = [];
-function boot() {
+function boot(storage = new Map()) {
   const { document, window } = parseHTML(html);
   const noop = () => {};
   const context2d = new Proxy({}, { get: (target, key) => key in target ? target[key] : key === 'createRadialGradient' ? () => ({ addColorStop: noop }) : noop, set: (target, key, value) => (target[key] = value, true) });
@@ -24,7 +24,12 @@ function boot() {
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length; }, clearTimeout: noop,
     requestAnimationFrame: fn => { sandbox.frame = fn; },
     addEventListener: (name, fn) => { events.set(name, fn); },
-    location: { reload: noop }, __EMERALD_TEST__: {},
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value)),
+      removeItem: key => storage.delete(key),
+    },
+    reloadCount: 0, location: { reload: () => { sandbox.reloadCount++; } }, __EMERALD_TEST__: {},
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -34,7 +39,7 @@ function boot() {
     setPixelRatio() {} setSize() {} render(scene, camera) { scene.updateMatrixWorld(true); camera.updateMatrixWorld(true); }
   }};`, sandbox);
   vm.runInContext(source, sandbox, { timeout: 30000 });
-  return { game: sandbox.__EMERALD_TEST__, document, events, timeouts, sandbox };
+  return { game: sandbox.__EMERALD_TEST__, document, events, timeouts, sandbox, storage };
 }
 
 const advance=(g,seconds,dt=.1)=>{for(let t=0;t<seconds-1e-7;t+=dt)g.step(Math.min(dt,seconds-t));};
@@ -128,6 +133,65 @@ const stopWorkers=g=>{for(const u of g.units.filter(u=>u.type==='villager')){u.o
  assert.ok(g.teams[1].age>=3,'AI saves for Castle Age');assert.ok(g.buildings.some(b=>b.team===1&&b.type==='monastery'&&b.built),'AI physically builds a monastery');assert.ok(g.units.some(u=>u.team===1&&u.type==='priest'),'AI pays to recruit priests');
  for(const team of g.teams)for(const n of Object.values(team.stock))assert.ok(Number.isFinite(n)&&n>=0,'Treasuries stay finite and nonnegative');for(const u of g.units)assert.ok(Number.isFinite(u.x)&&Number.isFinite(u.z)&&Number.isFinite(u.hp));
  console.log('PASS: an eight-minute simulation sustains both economies, enemy age progression, monastery construction, and priest recruitment without invalid state.');
+}
+const snapshot = g => { const data=JSON.parse(JSON.stringify(g.captureBattle())); delete data.savedAt; return data; };
+{
+ const first=boot(),g=first.game;advance(g,24);rich(g);
+ g.completeResearch('castle',0);g.completeResearch('wheelbarrow',0);g.completeResearch('pikeman',0);g.completeResearch('sanctity',0);
+ const site=g.construct('barracks',-3,24);assert.ok(site);for(const u of g.units.filter(u=>u.target===site)){u.x=site.x+site.radius+1;u.z=site.z;u.path=[];}
+ const barracks=g.addBuilding('barracks',-15,43),smith=g.addBuilding('blacksmith',-26,43);g.selectEntities([barracks]);assert.ok(g.train('spearman'));assert.ok(g.train('swordsman'));assert.ok(g.research('forging'));g.updateBuildings(4);
+ const sheltered=g.units.filter(u=>!u.team&&u.type==='villager')[4];g.requestGarrison([sheltered],g.playerTown);sheltered.x=g.playerTown.x+g.playerTown.radius+1;sheltered.z=g.playerTown.z;g.updateUnits(.1);assert.equal(sheltered.garrisoned,g.playerTown);
+ const priest=g.addUnit('priest',-30,53),converted=g.units.find(u=>u.team===1&&u.type==='archer');converted.x=-34;converted.z=55;g.convertUnit(priest,converted);
+ const target=g.addUnit('knight',-24,53,1);target.order='hold';g.updateVision();g.issueTarget([priest],target);g.updatePriest(priest,2);assert.ok(priest.conversion>0&&priest.conversion<7);
+ const hauler=g.units.find(u=>!u.team&&u.type==='villager'&&u.order==='gather');hauler.cargo={type:'food',amount:7.25};hauler.order='return';hauler.dropoff=g.playerTown;
+ const mine=g.resources.find(r=>r.type==='gold');mine.amount=0;g.resources.find(r=>r.type==='wood').amount=123.5;
+ g.damage(g.buildings.find(b=>b.type==='house'&&!b.team),9999,g.enemyKeep);g.damage(g.units.find(u=>u.team===1&&u.type==='spearman'),9999,priest);
+ barracks.rally={x:-10,z:45};g.playerTown.rallyTarget=mine;g.playerTown.rally={x:mine.x,z:mine.z};
+ g.issueMove([converted],{x:-20,z:60},true);g.shoot(converted,target,13);g.updateProjectiles(.05);assert.equal(g.projectiles.length,1);
+ g.trade('wood');g.controlGroups.set('5',[priest,converted]);g.selectEntities([priest,converted]);g.explored[0]=1;g.cameraTarget.set(-2,0,17);g.cameraDesired.set(7,0,22);first.document.getElementById('btn-speed').onclick();g.updateUI();
+ assert.ok(g.saveBattle());const before=snapshot(g),saved=first.storage.get(g.SAVE_KEY);g.validateBattle(JSON.parse(saved));
+ const second=boot(first.storage),restored=second.game;assert.equal(restored.getState().paused,true);assert.equal(second.document.getElementById('modal-title').textContent,'Your reign continues.');
+ assert.deepEqual(snapshot(restored),before,'A fresh runtime restores the complete simulation snapshot without advancing time');
+ const p=restored.units.find(u=>u.id===priest.id),t=restored.units.find(u=>u.id===target.id),worker=restored.units.find(u=>u.id===sheltered.id);
+ assert.equal(p.target,t);assert.equal(p.channelTarget,t);assert.equal(worker.garrisoned,restored.playerTown);assert.ok(restored.playerTown.garrison.includes(worker));assert.equal(restored.projectiles[0].target,t);
+ assert.equal(restored.units.find(u=>u.id===converted.id).team,0);assert.equal(restored.units.find(u=>u.id===hauler.id).dropoff,restored.playerTown);assert.equal(restored.units.find(u=>u.id===hauler.id).cargo.amount,7.25);
+ const ruins=restored.buildings.find(b=>b.kind==='building'&&!b.alive);assert.equal(ruins.mesh.scale.y,.16);assert.ok(restored.buildings.find(b=>b.id===site.id).scaffold.visible);
+ second.document.getElementById('btn-resume-save').onclick();assert.equal(restored.getState().paused,false);
+ advance(g,6);advance(restored,6);g.updateUI();restored.updateUI();assert.deepEqual(snapshot(restored),snapshot(g),'Jobs, paid queues, attacks, RNG, and conversion continue identically after reloading');assert.equal(t.team,0,'The saved priest chant completes after resuming');
+ console.log(`PASS: full save/reload round trip (${Math.round(saved.length/1024)} KB), both economies, queued research/recruits, construction, cargo, depleted mines, garrisons, converted models, mid-flight arrows, fog, camera, control groups, and deterministic continuation.`);
+}
+{
+ const run=boot(),g=run.game;run.sandbox.frame(1000);for(let i=1;i<=110;i++)run.sandbox.frame(1000+i*50);
+ const periodic=JSON.parse(run.storage.get(g.SAVE_KEY));assert.ok(periodic.state.elapsed>=4.9,'A running match autosaves every five real seconds');
+ g.stock.gold=431;run.events.get('beforeunload')();assert.equal(JSON.parse(run.storage.get(g.SAVE_KEY)).teams[0].stock.gold,431);
+ g.stock.gold=432;run.events.get('pagehide')();assert.equal(JSON.parse(run.storage.get(g.SAVE_KEY)).teams[0].stock.gold,432);
+ g.stock.gold=433;Object.defineProperty(run.document,'hidden',{value:true,configurable:true});run.document.dispatchEvent(new run.document.defaultView.Event('visibilitychange'));assert.equal(g.getState().paused,true);assert.equal(JSON.parse(run.storage.get(g.SAVE_KEY)).teams[0].stock.gold,433);
+ const elapsed=g.getState().elapsed,restored=boot(run.storage);restored.sandbox.frame(1000);restored.sandbox.frame(36000000);assert.equal(restored.game.getState().elapsed,elapsed,'Time away never simulates an unattended battle');
+ restored.document.getElementById('btn-new-save').onclick();restored.document.getElementById('btn-cancel-restart').onclick();assert.ok(run.storage.has(g.SAVE_KEY),'Cancelling a new reign retains the save');
+ restored.game.pauseGame();restored.document.getElementById('btn-pause-restart').onclick();restored.document.getElementById('btn-confirm-restart').onclick();assert.equal(restored.sandbox.reloadCount,1);restored.events.get('beforeunload')();restored.events.get('pagehide')();assert.equal(run.storage.has(g.SAVE_KEY),false);assert.equal(run.storage.has(g.BACKUP_KEY),false);
+ const fresh=boot(run.storage);assert.equal(fresh.game.getState().elapsed,0);assert.equal(fresh.game.getState().paused,false);assert.equal(fresh.game.stock.gold,240);
+ console.log('PASS: periodic, refresh, page-close, and hidden-tab saves; paused restoration; no offline advancement; confirmed new game clears both saves without the exit handler writing the old battle back.');
+}
+{
+ const original=boot(),g=original.game;advance(g,12);g.saveBattle();const previous=original.storage.get(g.SAVE_KEY);advance(g,7);g.saveBattle();original.storage.set(g.SAVE_KEY,'{broken JSON');
+ const recovered=boot(original.storage);assert.equal(recovered.game.getState().elapsed,JSON.parse(previous).state.elapsed);assert.match(recovered.document.getElementById('modal-content').textContent,/BACKUP RECOVERED/);assert.ok(recovered.game.saveBattle());assert.equal(original.storage.get(g.BACKUP_KEY),previous);
+ const corrupt=JSON.parse(original.storage.get(g.SAVE_KEY));corrupt.entities.find(e=>e.kind==='unit').target=999999;original.storage.set(g.SAVE_KEY,JSON.stringify(corrupt));original.storage.set(g.BACKUP_KEY,'broken backup');
+ const blocked=boot(original.storage),bad=original.storage.get(g.SAVE_KEY);assert.equal(blocked.game.getState().saveBlocked,true);assert.equal(blocked.game.getState().paused,true);blocked.game.resume();blocked.events.get('pagehide')();assert.equal(blocked.game.getState().paused,true);assert.equal(original.storage.get(g.SAVE_KEY),bad,'Invalid data is preserved until the player explicitly starts over');
+ corrupt.version=99;original.storage.set(g.SAVE_KEY,JSON.stringify(corrupt));original.storage.set(g.BACKUP_KEY,previous);const future=boot(original.storage);assert.equal(future.game.getState().saveBlocked,true,'An incompatible newer save is not overwritten with an older backup');
+ const denied=new Map();denied.get=()=>{throw new Error('Storage disabled');};const unavailable=boot(denied);assert.equal(unavailable.game.getState().paused,false);assert.equal(unavailable.game.getState().saveReady,false);advance(unavailable.game,1);assert.ok(Math.abs(unavailable.game.getState().elapsed-1)<1e-8);
+ const quota=boot(),old=quota.storage.get(quota.game.SAVE_KEY);quota.storage.set=()=>{throw new Error('Quota exceeded');};quota.game.stock.gold=444;assert.equal(quota.game.saveBattle(),false);assert.equal(quota.storage.get(quota.game.SAVE_KEY),old);assert.equal(quota.document.getElementById('save-status').textContent,'Save unavailable');
+ console.log('PASS: corrupt-save recovery, invalid references, incompatible versions, storage denial, and quota failure preserve prior saves and do not crash the game.');
+}
+{
+ const first=boot(),g=first.game,initial=first.storage.get(g.SAVE_KEY),second=boot(first.storage);assert.ok(second.game.saveBattle());assert.equal(first.storage.get(g.SAVE_KEY),initial,'An unchanged restored battle needs no new write');
+ advance(second.game,3);second.game.saveBattle();const latest=first.storage.get(g.SAVE_KEY);g.pauseGame();assert.equal(g.getState().saveBlocked,true);assert.equal(g.getState().paused,true);assert.match(first.document.getElementById('modal-content').textContent,/Load latest battle/);first.events.get('pagehide')();assert.equal(first.storage.get(g.SAVE_KEY),latest,'An older tab cannot overwrite newer progress');
+ const reloaded=boot(first.storage);assert.equal(reloaded.game.getState().elapsed,second.game.getState().elapsed);reloaded.game.newBattle();second.events.get('beforeunload')();assert.equal(first.storage.has(g.SAVE_KEY),false,'An older tab cannot resurrect a cleared battle');
+ const slow=boot();slow.sandbox.frame(1000);slow.sandbox.frame(6500);assert.ok(JSON.parse(slow.storage.get(slow.game.SAVE_KEY)).state.elapsed>0,'A slow frame still saves after five wall-clock seconds');
+ console.log('PASS: stale tabs cannot overwrite newer saves or resurrect a restarted match; autosave timing remains correct with slow frames.');
+}
+{
+ for(const win of [true,false]){const run=boot(),g=run.game;advance(g,10);g.damage(win?g.enemyKeep:g.playerTown,10000,win?g.playerTown:g.enemyKeep);g.saveBattle();const restored=boot(run.storage);assert.equal(restored.game.getState().ended,true);assert.equal(restored.game.getState().paused,true);assert.equal(restored.game.getState().battleResult,win?'victory':'defeat');assert.match(restored.document.getElementById('modal-content').textContent,win?/CONQUEST VICTORY/:/THE MARCH HAS FALLEN/);restored.document.getElementById('btn-restart').onclick();restored.events.get('pagehide')();assert.equal(run.storage.has(g.SAVE_KEY),false);}
+ console.log('PASS: victory and defeat survive reloads, and the result screen starts a fresh reign correctly.');
 }
 assert.equal(errors.length,0,errors.join('\n'));
 console.log('All RTS simulation checks passed. GPU rendering and real browser controls are verified separately.');

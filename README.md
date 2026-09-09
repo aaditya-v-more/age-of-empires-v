@@ -77,7 +77,11 @@ The chant uses an installed local speech voice where available, with a synthesiz
 | Sound | Speaker button; off initially |
 | Simulation speed | 1× / 1.5× / 2× button |
 
-On touchscreens, tap to select and tap a destination or resource to command. Drag to pan and pinch to zoom. The game pauses when its tab is hidden. Battles are not saved; reloading starts a new reign.
+On touchscreens, tap to select and tap a destination or resource to command. Drag to pan and pinch to zoom. The game pauses when its tab is hidden. **Your battle saves automatically in this browser every five seconds, when you pause or hide the tab, and when you refresh or leave the page.** Reloading restores your match paused; choose **Resume battle** when you are ready. Time does not advance while you are away.
+
+Saves include both kingdoms’ resources, workers and orders, units, buildings and construction, recruitment/research queues, technologies, priest conversion progress, projectiles, fog of war, control groups, and camera position. The previous autosave is retained as a recovery copy. To start over, use **Pause → Begin a new reign** and confirm.
+
+Saves stay in the same browser profile and site address; they do not sync between devices. Clearing site data removes them. If browser storage is blocked or full, the game shows **Save unavailable** and keeps any previous save intact.
 
 ## What is inside
 
@@ -98,7 +102,7 @@ npm run build
 npm start
 ```
 
-`npm test` runs the actual embedded game and Three.js geometry in a DOM simulator. It checks hauling and delivery, farm limits and reseeding, physical construction, research prerequisites and timing, population reservations, counters and projectiles, priest healing/conversion/interruption, fog of war, garrisoning, market spread, paid enemy recruitment, and victory/defeat. A 65-second economy check and an eight-minute simulation cover worker delivery, enemy age progression, and priest recruitment. GPU rendering and browser input require separate browser checks.
+`npm test` runs the actual embedded game and Three.js geometry in a DOM simulator. It checks hauling and delivery, farm limits and reseeding, physical construction, research prerequisites and timing, population reservations, counters and projectiles, priest healing/conversion/interruption, fog of war, garrisoning, market spread, paid enemy recruitment, and victory/defeat. A 65-second economy check and an eight-minute simulation cover worker delivery, enemy age progression, and priest recruitment. Save tests boot a fresh game runtime from stored data, compare complete snapshots and continued simulation, and cover exit/visibility events, new-game reset, backup recovery, corrupt or incompatible saves, storage failures, and victory/defeat restoration. GPU rendering and browser input require separate browser checks.
 
 `npm run build` validates both inline scripts and copies the complete game into `dist/index.html` for static hosting.
 
