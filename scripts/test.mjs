@@ -232,6 +232,7 @@ function tap(run, point) { pointer(run,'pointerdown',point.x,point.y);pointer(ru
  assert.equal(d.getElementById('btn-fullscreen').getAttribute('aria-label'),'Exit fullscreen');
  assert.equal(d.getElementById('modal-shade').classList.contains('open'),false,'Creator links live in the closed menu during active play');
  assert.equal(d.getElementById('action-grid').children.length,3,'Compact actions have readable three-card pages');
+ assert.match(d.getElementById('production-status').textContent,/choose Order, then tap/,'Compact rally instructions match the touch input mode');
  g.stock.wood=12345;g.updateUI();assert.equal(d.getElementById('res-wood').textContent,'12.3k','Large stockpiles fit the compact HUD');assert.match(d.getElementById('mobile-age-time').textContent,/Feudal Age/);g.saveBattle();assert.equal(d.getElementById('mobile-save-status').textContent,'Saved locally');
  d.getElementById('btn-actions').onclick();assert.equal(d.body.dataset.mobilePanel,'actions');
  d.getElementById('btn-map').onclick();assert.equal(d.body.dataset.mobilePanel,'map');assert.equal(d.getElementById('btn-actions').getAttribute('aria-expanded'),'false');
@@ -240,7 +241,7 @@ function tap(run, point) { pointer(run,'pointerdown',point.x,point.y);pointer(ru
  do { seen.push(...[...d.querySelectorAll('#action-grid .action-name')].map(el=>el.textContent));if(d.getElementById('page-next').disabled)break;d.getElementById('page-next').onclick(); } while(seen.length<30);
  assert.equal(seen.length,12);assert.equal(new Set(seen).size,12);assert.ok(seen.includes('Market'),'Pagination keeps every building reachable');
  run.sandbox.innerWidth=1440;run.sandbox.innerHeight=900;run.sandbox.matchMedia=()=>({matches:false});run.events.get('resize')();
- assert.equal(d.body.classList.contains('compact-ui'),false);assert.equal(d.getElementById('action-grid').children.length,6,'Desktop retains six action cards after rotation/resizing');
+ assert.equal(d.body.classList.contains('compact-ui'),false);assert.equal(d.getElementById('action-grid').children.length,6,'Desktop retains six action cards after rotation/resizing');g.updateUI();assert.match(d.getElementById('production-status').textContent,/RIGHT-CLICK/,'Desktop retains its mouse rally instructions');
  assert.equal(d.body.dataset.mobilePanel,'');
  await g.toggleFullscreen();assert.equal(run.sandbox.fullscreenExits,1);assert.equal(d.getElementById('btn-fullscreen').getAttribute('aria-pressed'),'false');
  g.pauseGame();assert.ok(d.querySelector('#modal-content [data-creator-links]'));await d.getElementById('btn-resume').onclick();
