@@ -278,5 +278,31 @@ function tap(run, point) { pointer(run,'pointerdown',point.x,point.y);pointer(ru
  console.log('PASS: touch selection, camera pan, drag-box groups, additive group taps, building rallies, gathering orders, pinch suppression, and construction cancellation.');
 }
 
+{
+ for(const pointerType of ['mouse','pen']){
+  const run=boot(new Map(),{width:740,height:360}),g=run.game,d=run.document;
+  const event=(type,x,y)=>pointer(run,type,x,y,1,{pointerType});
+  const click=p=>{event('pointerdown',p.x,p.y);event('pointerup',p.x,p.y);};
+  stopWorkers(g);g.updateCamera(0);g.selectEntities([g.playerTown]);
+  d.getElementById('touch-order').onclick();click({x:590,y:180});
+  assert.ok(g.playerTown.rally,`${pointerType} uses the visible Order control to set a rally`);
+  assert.equal(g.getState().selected[0],g.playerTown,`${pointerType} Order keeps its selection`);
+  d.getElementById('touch-select').onclick();const u=g.units.find(u=>!u.team&&u.type==='villager'),p=g.projected(u);click(p);
+  assert.equal(g.getState().selected[0],u,`${pointerType} Select inspects a unit`);
+  const before={x:g.cameraDesired.x,z:g.cameraDesired.z};event('pointerdown',180,160);event('pointermove',220,200);event('pointerup',220,200);
+  assert.notDeepEqual({x:g.cameraDesired.x,z:g.cameraDesired.z},before,`${pointerType} Select drags pan in compact mode`);
+  g.updateCamera(1);const point=g.projected(u),camera={x:g.cameraDesired.x,z:g.cameraDesired.z};d.getElementById('touch-group').onclick();
+  event('pointerdown',point.x-24,point.y-24);event('pointermove',point.x+24,point.y+24);event('pointerup',point.x+24,point.y+24);
+  assert.ok(g.getState().selected.includes(u),`${pointerType} Group drags select units`);
+  assert.deepEqual({x:g.cameraDesired.x,z:g.cameraDesired.z},camera,`${pointerType} Group does not pan`);
+  const count=g.getState().selected.length;click(point);assert.equal(g.getState().selected.length,count-1,`${pointerType} Group clicks remove a selected unit`);
+ }
+ const run=boot(),g=run.game;stopWorkers(g);g.updateCamera(0);g.setTouchMode('order');g.selectEntities([g.playerTown]);const u=g.units.find(u=>!u.team&&u.type==='villager'),point=g.projected(u);
+ pointer(run,'pointerdown',point.x,point.y,1,{pointerType:'mouse'});pointer(run,'pointerup',point.x,point.y,1,{pointerType:'mouse'});
+ assert.equal(g.getState().selected[0],u,'Full desktop left-click still selects, regardless of an earlier compact control mode');assert.equal(g.playerTown.rally,null);
+ g.selectEntities([g.playerTown]);pointer(run,'pointerdown',point.x,point.y,1,{pointerType:'mouse',button:2});pointer(run,'pointerup',point.x,point.y,1,{pointerType:'mouse',button:2});assert.ok(g.playerTown.rally,'Full desktop right-click still commands');
+ console.log('PASS: visible compact Select/Order/Group controls work with mouse and pen; full desktop left/right-click semantics remain unchanged.');
+}
+
 assert.equal(errors.length,0,errors.join('\n'));
 console.log('All RTS simulation checks passed. GPU rendering and real browser controls are verified separately.');
