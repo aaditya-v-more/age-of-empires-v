@@ -9,16 +9,19 @@ const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const engine = html.match(/<script id="three-engine">([\s\S]*?)<\/script>/)[1];
 const source = html.match(/<script id="game-code">([\s\S]*?)<\/script>/)[1];
 const errors = [];
-function boot(storage = new Map()) {
+function boot(storage = new Map(), options = {}) {
   const { document, window } = parseHTML(html);
   const noop = () => {};
   const context2d = new Proxy({}, { get: (target, key) => key in target ? target[key] : key === 'createRadialGradient' ? () => ({ addColorStop: noop }) : noop, set: (target, key, value) => (target[key] = value, true) });
   window.HTMLCanvasElement.prototype.getContext = () => context2d;
   window.HTMLElement.prototype.focus = noop;
+  window.HTMLCanvasElement.prototype.setPointerCapture = noop;
+  window.HTMLCanvasElement.prototype.releasePointerCapture = noop;
   const events = new Map();
   const timeouts = [];
   const sandbox = {
-    document, innerWidth: 1440, innerHeight: 900, devicePixelRatio: 1,
+    document, innerWidth: options.width ?? 1440, innerHeight: options.height ?? 900, devicePixelRatio: 1,
+    matchMedia: () => ({ matches: !!options.coarse }),
     console: { log: noop, warn: (...args) => errors.push(args.join(' ')), error: (...args) => errors.push(args.join(' ')) },
     performance, Math, Date, Float32Array, Uint8Array, Int32Array, Uint16Array, Uint32Array,
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length; }, clearTimeout: noop,
@@ -31,6 +34,21 @@ function boot(storage = new Map()) {
     },
     reloadCount: 0, location: { reload: () => { sandbox.reloadCount++; } }, __EMERALD_TEST__: {},
   };
+  sandbox.fullscreenRequests = 0;
+  sandbox.fullscreenExits = 0;
+  if (options.fullscreen !== undefined) {
+    document.documentElement.requestFullscreen = async () => {
+      sandbox.fullscreenRequests++;
+      if (options.fullscreen === 'reject') throw new Error('Fullscreen rejected');
+      document.fullscreenElement = document.documentElement;
+      document.dispatchEvent(new window.Event('fullscreenchange'));
+    };
+    document.exitFullscreen = async () => {
+      sandbox.fullscreenExits++;
+      document.fullscreenElement = null;
+      document.dispatchEvent(new window.Event('fullscreenchange'));
+    };
+  }
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(engine, sandbox, { timeout: 10000 });
@@ -39,6 +57,7 @@ function boot(storage = new Map()) {
     setPixelRatio() {} setSize() {} render(scene, camera) { scene.updateMatrixWorld(true); camera.updateMatrixWorld(true); }
   }};`, sandbox);
   vm.runInContext(source, sandbox, { timeout: 30000 });
+  if (options.autoStart !== false) document.getElementById('btn-start')?.onclick();
   return { game: sandbox.__EMERALD_TEST__, document, events, timeouts, sandbox, storage };
 }
 
@@ -193,5 +212,70 @@ const snapshot = g => { const data=JSON.parse(JSON.stringify(g.captureBattle()))
  for(const win of [true,false]){const run=boot(),g=run.game;advance(g,10);g.damage(win?g.enemyKeep:g.playerTown,10000,win?g.playerTown:g.enemyKeep);g.saveBattle();const restored=boot(run.storage);assert.equal(restored.game.getState().ended,true);assert.equal(restored.game.getState().paused,true);assert.equal(restored.game.getState().battleResult,win?'victory':'defeat');assert.match(restored.document.getElementById('modal-content').textContent,win?/CONQUEST VICTORY/:/THE MARCH HAS FALLEN/);restored.document.getElementById('btn-restart').onclick();restored.events.get('pagehide')();assert.equal(run.storage.has(g.SAVE_KEY),false);}
  console.log('PASS: victory and defeat survive reloads, and the result screen starts a fresh reign correctly.');
 }
+
+// Touch controls execute the same orders as desktop input, using real projected world coordinates.
+function pointer(run, type, x, y, id = 1, extra = {}) {
+ const event = new run.document.defaultView.Event(type, {bubbles:true,cancelable:true});
+ Object.assign(event,{clientX:x,clientY:y,pointerId:id,pointerType:'touch',button:0,shiftKey:false,altKey:false,...extra});
+ run.document.getElementById('world').dispatchEvent(event);
+}
+function tap(run, point) { pointer(run,'pointerdown',point.x,point.y);pointer(run,'pointerup',point.x,point.y); }
+{
+ const run=boot(new Map(),{width:390,height:844,coarse:true,autoStart:false,fullscreen:'allow'}),g=run.game,d=run.document;
+ assert.equal(g.getState().paused,true,'A fresh battle waits for the explicit Start gesture');
+ assert.equal(run.sandbox.fullscreenRequests,0,'Loading a game never requests fullscreen');
+ assert.ok(d.body.classList.contains('compact-ui'));
+ assert.equal(d.querySelectorAll('[data-creator-links]').length,1);
+ assert.deepEqual([...d.querySelectorAll('[data-creator-links] a')].map(a=>a.href),['https://aadityamore.com/','https://github.com/aaditya-v-more','https://www.linkedin.com/in/aadityavmore/']);
+ await d.getElementById('btn-start').onclick();
+ assert.equal(g.getState().paused,false);assert.equal(run.sandbox.fullscreenRequests,1);assert.equal(g.isFullscreen(),true);
+ assert.equal(d.getElementById('btn-fullscreen').getAttribute('aria-label'),'Exit fullscreen');
+ assert.equal(d.getElementById('modal-shade').classList.contains('open'),false,'Creator links live in the closed menu during active play');
+ assert.equal(d.getElementById('action-grid').children.length,3,'Compact actions have readable three-card pages');
+ g.stock.wood=12345;g.updateUI();assert.equal(d.getElementById('res-wood').textContent,'12.3k','Large stockpiles fit the compact HUD');assert.match(d.getElementById('mobile-age-time').textContent,/Feudal Age/);g.saveBattle();assert.equal(d.getElementById('mobile-save-status').textContent,'Saved locally');
+ d.getElementById('btn-actions').onclick();assert.equal(d.body.dataset.mobilePanel,'actions');
+ d.getElementById('btn-map').onclick();assert.equal(d.body.dataset.mobilePanel,'map');assert.equal(d.getElementById('btn-actions').getAttribute('aria-expanded'),'false');
+ d.getElementById('btn-map').onclick();assert.equal(d.body.dataset.mobilePanel,'');
+ d.getElementById('tab-build').onclick();const seen=[];
+ do { seen.push(...[...d.querySelectorAll('#action-grid .action-name')].map(el=>el.textContent));if(d.getElementById('page-next').disabled)break;d.getElementById('page-next').onclick(); } while(seen.length<30);
+ assert.equal(seen.length,12);assert.equal(new Set(seen).size,12);assert.ok(seen.includes('Market'),'Pagination keeps every building reachable');
+ run.sandbox.innerWidth=1440;run.sandbox.innerHeight=900;run.sandbox.matchMedia=()=>({matches:false});run.events.get('resize')();
+ assert.equal(d.body.classList.contains('compact-ui'),false);assert.equal(d.getElementById('action-grid').children.length,6,'Desktop retains six action cards after rotation/resizing');
+ assert.equal(d.body.dataset.mobilePanel,'');
+ await g.toggleFullscreen();assert.equal(run.sandbox.fullscreenExits,1);assert.equal(d.getElementById('btn-fullscreen').getAttribute('aria-pressed'),'false');
+ g.pauseGame();assert.ok(d.querySelector('#modal-content [data-creator-links]'));await d.getElementById('btn-resume').onclick();
+ assert.equal(run.sandbox.fullscreenRequests,1,'A deliberate fullscreen exit is respected on Resume');
+ await g.toggleFullscreen();assert.equal(run.sandbox.fullscreenRequests,2);
+ run.document.fullscreenElement=null;g.pauseGame();await d.getElementById('btn-resume').onclick();
+ assert.equal(run.sandbox.fullscreenRequests,3,'Resume requests fullscreen while the player prefers it');
+ console.log('PASS: explicit Start, fullscreen preference/toggle/resume, menu-only creator links, one compact panel at a time, all 12 buildings across pages, and desktop layout restoration.');
+}
+{
+ for(const fullscreen of [undefined,'reject']){
+  const run=boot(new Map(),{width:375,height:812,autoStart:false,fullscreen});await run.document.getElementById('btn-start').onclick();
+  assert.equal(run.game.getState().paused,false,'Unsupported or rejected fullscreen never blocks play');
+  assert.equal(run.game.isFullscreen(),false);assert.match(run.document.getElementById('notices').textContent,/Fullscreen/);
+ }
+ const phone=boot(new Map(),{width:932,height:430,coarse:true});assert.equal(phone.game.compactLayout(),true,'Landscape touch devices use the compact UI even above 900 px');phone.sandbox.innerWidth=1024;phone.sandbox.innerHeight=1366;phone.events.get('resize')();assert.equal(phone.game.compactLayout(),true,'Large touch tablets must retain the Order and Group controls');
+ console.log('PASS: denied and unsupported fullscreen continue normally; wide landscape phones retain compact controls.');
+}
+{
+ const run=boot(new Map(),{width:390,height:844,coarse:true}),g=run.game,d=run.document;
+ g.setPaused(false);stopWorkers(g);g.updateCamera(0);const u=g.units.find(u=>!u.team&&u.type==='villager'),point=g.projected(u);
+ g.selectEntities([]);tap(run,point);assert.equal(g.getState().selected[0],u,'Select mode taps inspect a friendly unit');
+ const before={x:g.cameraDesired.x,z:g.cameraDesired.z};pointer(run,'pointerdown',180,320);pointer(run,'pointermove',220,360);pointer(run,'pointerup',220,360);
+ assert.notDeepEqual({x:g.cameraDesired.x,z:g.cameraDesired.z},before,'Select mode drags pan the camera');assert.equal(g.getState().selected[0],u,'Camera dragging keeps the selection');
+ g.updateCamera(1);const p=g.projected(u),camera={x:g.cameraDesired.x,z:g.cameraDesired.z};g.setTouchMode('group');
+ pointer(run,'pointerdown',p.x-24,p.y-24);pointer(run,'pointermove',p.x+24,p.y+24);pointer(run,'pointerup',p.x+24,p.y+24);
+ assert.ok(g.getState().selected.includes(u),'Group mode drag selects units in a screen rectangle');assert.deepEqual({x:g.cameraDesired.x,z:g.cameraDesired.z},camera,'Group mode does not pan');
+ const n=g.getState().selected.length;tap(run,p);assert.equal(g.getState().selected.length,n-1,'Group mode tap removes a selected unit');
+ g.selectEntities([g.playerTown]);g.setTouchMode('order');const rally={x:165,y:410};tap(run,rally);assert.ok(g.playerTown.rally,'Touch orders can set a production-building rally point');
+ g.selectEntities([u]);g.setTouchMode('order');const wood=g.resources.find(r=>r.type==='wood'&&g.isVisibleAt(r.x,r.z));tap(run,g.projected(wood,0));assert.equal(u.order,'gather');assert.equal(u.gatherTarget,wood,'Touch orders dispatch gathering to the same economic system');
+ const targetBefore=u.gatherTarget;pointer(run,'pointerdown',140,330,1);pointer(run,'pointerdown',240,330,2);pointer(run,'pointermove',280,330,2);pointer(run,'pointerup',140,330,1);pointer(run,'pointerup',280,330,2);
+ assert.equal(u.gatherTarget,targetBefore,'Pinch release never issues an unintended command');assert.equal(d.getElementById('selection-rectangle').style.display,'none');
+ rich(g);g.setMobilePanel('actions');g.startPlacement('barracks');assert.equal(d.body.dataset.mobilePanel,'','Starting construction clears the command drawer');assert.match(d.getElementById('placement-help').textContent,/Tap clear ground/);d.getElementById('btn-cancel-placement').onclick();assert.equal(d.getElementById('placement-badge').style.display,'none');
+ console.log('PASS: touch selection, camera pan, drag-box groups, additive group taps, building rallies, gathering orders, pinch suppression, and construction cancellation.');
+}
+
 assert.equal(errors.length,0,errors.join('\n'));
 console.log('All RTS simulation checks passed. GPU rendering and real browser controls are verified separately.');

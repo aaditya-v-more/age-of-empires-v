@@ -77,7 +77,7 @@ The chant uses an installed local speech voice where available, with a synthesiz
 | Sound | Speaker button; off initially |
 | Simulation speed | 1× / 1.5× / 2× button |
 
-On touchscreens, tap to select and tap a destination or resource to command. Drag to pan and pinch to zoom. The game pauses when its tab is hidden. **Your battle saves automatically in this browser every five seconds, when you pause or hide the tab, and when you refresh or leave the page.** Reloading restores your match paused; choose **Resume battle** when you are ready. Time does not advance while you are away.
+On touchscreens, **Select** inspects a unit or building, **Order** commands the selection, and **Group** lets you drag a selection box or tap units to add/remove them. Drag in Select or Order mode to pan and pinch to zoom. Tap **Actions**, **Map**, or **Kingdom** to open one panel at a time; tap the selected-unit name for details. Construction has an explicit Cancel button. The game pauses when its tab is hidden. **Your battle saves automatically in this browser every five seconds, when you pause or hide the tab, and when you refresh or leave the page.** Reloading restores your match paused; choose **Resume battle** when you are ready. Time does not advance while you are away.
 
 Saves include both kingdoms’ resources, workers and orders, units, buildings and construction, recruitment/research queues, technologies, priest conversion progress, projectiles, fog of war, control groups, and camera position. The previous autosave is retained as a recovery copy. To start over, use **Pause → Begin a new reign** and confirm.
 
@@ -111,3 +111,11 @@ Only the test runner has a development dependency. The game itself remains a sin
 ## Deployment
 
 The public GitHub repository is connected to Vercel. Production tracks `main`: pushing to `main` automatically builds and deploys the game. Vercel runs `npm run build` and serves `dist/index.html`; `vercel.json` keeps those settings in the repository.
+
+## Mobile interface and fullscreen
+
+The responsive command dock replaces the always-open desktop panels on phones and devices whose primary pointer is touch, including tablets and landscape viewports. All recruitment, buildings, technology, and commands remain available through three-card pages. The map panel includes zoom, return-to-town, and cinematic controls. The pause menu includes speed, sound, technology, and the field guide. Layouts respect display cutouts, home indicators, and the dynamic browser viewport.
+
+A fresh game waits at **Start the battle**. Start and explicit Resume actions request fullscreen when the browser supports it; no fullscreen request happens on load. The fullscreen button enters or leaves fullscreen. After a deliberate exit, Resume respects that choice. Unsupported or rejected fullscreen leaves the game playable in its browser viewport. Browser support and user-gesture requirements still apply, particularly on iPhones and embedded pages.
+
+Creator links to Aaditya More’s website, GitHub, and LinkedIn appear in menus only, inside `nav[data-creator-links]`. The deployment wrapper can append a Back to Play link to this group or the existing `.modal-actions` group without adding navigation over the battlefield.
