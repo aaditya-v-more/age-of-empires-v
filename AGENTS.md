@@ -10,3 +10,5 @@ This is an independently maintained project. Any modification to this project or
 - Do not deploy or change hosting settings without task authorization. A push to main may trigger the repository's existing Vercel integration.
 
 - Keep this game’s original palette. Synchronization refers only to creator/source navigation links, and adding or updating those links across projects requires explicit user permission. It does not authorize adding themes, using device appearance, or synchronizing appearance across sites. Preserve the existing authorized creator links.
+
+- The Vercel project `age-of-empires-v` publishes successful `main` pushes using `vercel.json`. The Play route forwards to that deployment; keep `https://play.aadityamore.com/emerald-march/` as the canonical and preserve the absolute Back to Play menu link. Verify the exact pushed commit reaches production instead of manually redeploying it.

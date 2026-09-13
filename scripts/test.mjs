@@ -226,7 +226,7 @@ function tap(run, point) { pointer(run,'pointerdown',point.x,point.y);pointer(ru
  assert.equal(run.sandbox.fullscreenRequests,0,'Loading a game never requests fullscreen');
  assert.ok(d.body.classList.contains('compact-ui'));
  assert.equal(d.querySelectorAll('[data-creator-links]').length,1);
- assert.deepEqual([...d.querySelectorAll('[data-creator-links] a')].map(a=>a.href),['https://aadityamore.com/','https://github.com/aaditya-v-more','https://www.linkedin.com/in/aadityavmore/']);
+ assert.deepEqual([...d.querySelectorAll('[data-creator-links] a')].map(a=>a.href),['https://aadityamore.com/','https://github.com/aaditya-v-more','https://www.linkedin.com/in/aadityavmore/','https://play.aadityamore.com/']);
  await d.getElementById('btn-start').onclick();
  assert.equal(g.getState().paused,false);assert.equal(run.sandbox.fullscreenRequests,1);assert.equal(g.isFullscreen(),true);
  assert.equal(d.getElementById('btn-fullscreen').getAttribute('aria-label'),'Exit fullscreen');

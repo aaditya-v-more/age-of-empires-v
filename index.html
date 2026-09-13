@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#101a18">
 <meta name="description" content="The Second Reign: a single-file 3D RTS with resource hauling, unit counters, research, siege, fog of war, and Wolololo priests.">
 <title>Age of Empires V · The Second Reign</title>
+<link rel="canonical" href="https://play.aadityamore.com/emerald-march/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101a18'/%3E%3Ctext x='32' y='47' text-anchor='middle' font-family='Georgia' font-size='46' fill='%23d6b87b'%3EV%3C/text%3E%3C/svg%3E">
 <style>
 :root{color-scheme:dark;--ink:#101a18;--panel:rgba(13,24,22,.94);--line:rgba(203,178,122,.26);--gold:#d9bd80;--muted:#9baba1;--paper:#f3eee0;--green:#a5c390;--red:#db8776;--serif:Georgia,'Times New Roman',serif;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
@@ -4690,7 +4691,7 @@ function selectInScreenBox(state,x,y,add=false){
  const list=units.filter(u=>{if(!u.alive||u.team||u.garrisoned)return false;const p=projected(u);return p.x>=x1&&p.x<=x2&&p.y>=y1&&p.y<=y2;});
  selectEntities(add?[...new Set([...selected,...list])]:list);sfx('select');
 }
-function creatorLinks(){return '<nav class="creator-links" data-creator-links aria-label="About the creator"><span>Created by Aaditya More</span><a href="https://aadityamore.com/" target="_blank" rel="noopener noreferrer">Website ↗</a><a href="https://github.com/aaditya-v-more" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/aadityavmore/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></nav>';}
+function creatorLinks(){return '<nav class="creator-links" data-creator-links aria-label="About the creator"><span>Created by Aaditya More</span><a href="https://aadityamore.com/" target="_blank" rel="noopener noreferrer">Website ↗</a><a href="https://github.com/aaditya-v-more" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/aadityavmore/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a><a href="https://play.aadityamore.com/" data-collection-return>← Back to Play</a></nav>';}
 const isFullscreen=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
 function syncFullscreen(){
  for(const id of ['btn-fullscreen','btn-menu-fullscreen']){const button=$(id);if(!button)continue;const label=isFullscreen()?'Exit fullscreen':'Enter fullscreen';button.setAttribute('aria-label',label);button.setAttribute('aria-pressed',String(isFullscreen()));button.title=label;if(id==='btn-menu-fullscreen')button.textContent=label;}
