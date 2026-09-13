@@ -7,6 +7,189 @@
 <meta name="description" content="The Second Reign: a single-file 3D RTS with resource hauling, unit counters, research, siege, fog of war, and Wolololo priests.">
 <title>Age of Empires V · The Second Reign</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101a18'/%3E%3Ctext x='32' y='47' text-anchor='middle' font-family='Georgia' font-size='46' fill='%23d6b87b'%3EV%3C/text%3E%3C/svg%3E">
+<script id="appearance-init">/* Shared appearance for Aaditya's sites. Load synchronously in the head. */
+(() => {
+  if (window.AadityaAppearance) return;
+  const key = "aaditya-appearance";
+  const root = document.documentElement;
+  const device = window.matchMedia("(prefers-color-scheme: dark)");
+  const firstParty = (host) =>
+    host === "aadityamore.com" || host.endsWith(".aadityamore.com");
+  const shared = firstParty(location.hostname);
+  const valid = (value) => value === "light" || value === "dark";
+  const stored = () => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const cookie = () => {
+    try {
+      const value = document.cookie
+        .split(";")
+        .map((v) => v.trim())
+        .find((v) => v.startsWith(key + "="))
+        ?.slice(key.length + 1);
+      return valid(value) ? value : null;
+    } catch {
+      return null;
+    }
+  };
+  const saveLocal = (value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* Optional persistence. */
+    }
+  };
+  const saveCookie = (value) => {
+    if (!shared) return;
+    try {
+      document.cookie = `${key}=${value}; Path=/; Domain=aadityamore.com; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+    } catch {
+      /* The selected palette still works if cookies are blocked. */
+    }
+  };
+  let preference = "system";
+  let effective;
+  let lastCookie = cookie();
+  let sessionChoice = null;
+  const read = () => {
+    if (!shared)
+      return sessionChoice || (valid(stored()) ? stored() : "system");
+    const latest = cookie();
+    if (latest !== lastCookie) sessionChoice = null;
+    lastCookie = latest;
+    return sessionChoice || latest || "system";
+  };
+
+  // Migrate the old portfolio-only setting once. Other hosts' old storage must
+  // never overwrite the newer shared cookie when a dormant tab is revisited.
+  if (shared && location.hostname === "aadityamore.com") {
+    try {
+      if (!localStorage.getItem(key + "-migrated")) {
+        const previous = stored();
+        if (!lastCookie && valid(previous)) saveCookie(previous);
+        localStorage.setItem(key + "-migrated", "1");
+      }
+    } catch {
+      /* Storage can be unavailable in private or restricted contexts. */
+    }
+  }
+
+  const paintControls = () => {
+    document.querySelectorAll("[data-appearance-choice]").forEach((button) => {
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.appearanceChoice === effective),
+      );
+    });
+  };
+  const apply = () => {
+    const next =
+      preference === "system"
+        ? device.matches
+          ? "dark"
+          : "light"
+        : preference;
+    const changed =
+      effective !== next || root.dataset.appearancePreference !== preference;
+    effective = next;
+    root.dataset.theme = effective;
+    root.dataset.appearancePreference = preference;
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.content =
+        getComputedStyle(root).getPropertyValue("--appearance-chrome").trim() ||
+        (effective === "dark" ? "#131c2b" : "#f4f0e8");
+    });
+    paintControls();
+    if (changed)
+      window.dispatchEvent(
+        new CustomEvent("aaditya:appearance", {
+          detail: { preference, effective },
+        }),
+      );
+  };
+  const refresh = () => {
+    preference = read();
+    apply();
+  };
+  const choose = (value) => {
+    if (!valid(value)) return;
+    saveLocal(value);
+    saveCookie(value);
+    lastCookie = cookie();
+    sessionChoice = shared && lastCookie !== value ? value : null;
+    if (!shared && stored() !== value) sessionChoice = value;
+    preference = value;
+    apply();
+  };
+  window.AadityaAppearance = {
+    get: () => ({ preference, effective }),
+    choose,
+    refresh,
+  };
+
+  // The one linked project on GitHub Pages cannot share a parent-domain cookie.
+  // Transfer only the appearance choice on navigation between our own sites.
+  const owned = (url) =>
+    firstParty(url.hostname) ||
+    (url.hostname === "aaditya-v-more.github.io" &&
+      /^\/claude-ollama(?:\/|$)/.test(url.pathname));
+  const current = new URL(location.href);
+  const incoming = current.searchParams.get("appearance");
+  if (owned(current) && valid(incoming)) {
+    choose(incoming);
+    current.searchParams.delete("appearance");
+    try {
+      history.replaceState(history.state, "", current.href);
+    } catch {
+      /* Cosmetic only. */
+    }
+  } else refresh();
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("button[data-appearance-choice]");
+    if (button) choose(button.dataset.appearanceChoice);
+  });
+  const decorate = (event) => {
+    const link = event.target.closest?.("a[href]");
+    if (!link) return;
+    const url = new URL(link.href, location.href);
+    if (
+      !owned(current) ||
+      !owned(url) ||
+      url.protocol !== "https:" ||
+      url.origin === current.origin
+    )
+      return;
+    if (firstParty(current.hostname) && firstParty(url.hostname)) return;
+    if (valid(preference)) url.searchParams.set("appearance", preference);
+    else url.searchParams.delete("appearance");
+    link.href = url.href;
+  };
+  document.addEventListener("click", decorate, true);
+  document.addEventListener("auxclick", decorate, true);
+  document.addEventListener("contextmenu", decorate, true);
+  document.addEventListener("DOMContentLoaded", refresh);
+  window.addEventListener("pageshow", refresh);
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key === key || event.key === null) refresh();
+  });
+  device.addEventListener("change", refresh);
+  // Storage events don't cross origins. Refresh visible sibling-site tabs, and
+  // catch restoration from the back/forward cache without requiring a reload.
+  window.cookieStore?.addEventListener("change", refresh);
+  setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 1500);
+})();
+</script>
 <style>
 :root{color-scheme:dark;--ink:#101a18;--panel:rgba(13,24,22,.94);--line:rgba(203,178,122,.26);--gold:#d9bd80;--muted:#9baba1;--paper:#f3eee0;--green:#a5c390;--red:#db8776;--serif:Georgia,'Times New Roman',serif;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#15231c;color:var(--paper);font-family:var(--sans);font-size:14px}button{font:inherit;color:inherit;border:0;cursor:pointer;background:none}button:disabled{cursor:not-allowed;opacity:.38}button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:4px}button:not(:disabled){transition:background .18s,border-color .18s,color .18s,transform .18s}button:active:not(:disabled){transform:translateY(1px)}button svg{pointer-events:none}svg.icon{width:22px;height:22px;display:inline-block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}#world{position:fixed;inset:0;display:block;width:100%;height:100%;outline:none;touch-action:none;cursor:default}#vignette{position:fixed;inset:0;pointer-events:none;background:linear-gradient(0deg,rgba(8,18,15,.66),transparent 29%,transparent 78%,rgba(8,18,15,.26)),radial-gradient(ellipse at 52% 48%,transparent 42%,rgba(13,25,19,.18) 100%)}
@@ -58,6 +241,94 @@ body.compact-ui{--dock-bottom:calc(8px + env(safe-area-inset-bottom));--sheet-bo
 .compact-ui .placement-badge{left:var(--edge-left);right:var(--edge-right);transform:none;bottom:var(--sheet-bottom);max-width:none;width:auto;padding:9px 10px;white-space:normal;border-radius:6px;font-size:14px;z-index:16}.compact-ui .placement-badge span{display:block;margin:5px 54px 0 0;font-size:11px;line-height:1.5}.compact-ui .placement-badge button{position:absolute;right:7px;top:7px;margin:0;font-size:11px}.compact-ui .world-label{display:none}.compact-ui #tooltip{display:none!important}.compact-ui .modal{padding:24px 18px;max-width:640px;width:100%;max-height:calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.compact-ui .modal h2{font-size:30px}.compact-ui .modal p{font-size:13px}.compact-ui .modal .plain-button{min-height:44px;margin-top:10px}.compact-ui .modal-close{margin:-12px -7px 0 0}.compact-ui .guide-columns{grid-template-columns:1fr}.compact-ui .control-table{grid-template-columns:1fr;gap:5px;font-size:12px}.compact-ui .control-table span{margin-bottom:10px}.compact-ui .tech-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.compact-ui .tech-card p{font-size:12px}.compact-ui .tech-card small,.compact-ui .tech-card em{font-size:11px}.compact-ui .market-grid{grid-template-columns:1fr}.compact-ui .cinematic-exit{bottom:calc(20px + env(safe-area-inset-bottom));min-height:44px}
 @media(max-width:380px){.compact-ui .resource{gap:3px;padding:0 2px}.compact-ui .resource svg{width:14px;height:14px}.compact-ui .resource b{font-size:12px}.compact-ui .resource .r-meta{font-size:8px}}
 @media(max-height:520px){.compact-ui{--sheet-bottom:calc(72px + env(safe-area-inset-bottom))}.compact-ui .mobile-dock{left:24%;padding:5px}.compact-ui .mobile-selection{position:fixed;left:var(--edge-left);bottom:var(--dock-bottom);width:calc(24% - var(--edge-left) - 8px);min-height:56px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#12251bf7;font-size:14px;overflow-wrap:anywhere}.compact-ui .mobile-selection small{display:none}.compact-ui .mobile-controls button{min-height:44px}.compact-ui .topbar{height:calc(52px + env(safe-area-inset-top))}.compact-ui .mobile-overview,.compact-ui .utilities{top:calc(58px + env(safe-area-inset-top))}.compact-ui .wave-alert{top:calc(108px + env(safe-area-inset-top))}.compact-ui .notice-stack{top:calc(140px + env(safe-area-inset-top))}.compact-ui .action-panel,.compact-ui .selection-panel,.compact-ui .minimap-panel,.compact-ui .objectives{left:24%;max-height:calc(100dvh - var(--sheet-bottom) - 62px - env(safe-area-inset-top))}.compact-ui .mobile-sheet-heading{font-size:15px;margin-bottom:0}.compact-ui .action-tabs{grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px}.compact-ui .action-pages{grid-column:auto;margin:0;gap:8px}.compact-ui .action-pages button{width:44px}.compact-ui .action{min-height:90px}.compact-ui .action .action-name{min-height:0}.compact-ui .production-status{margin-top:5px}.compact-ui[data-mobile-panel="map"] .camera-tools{left:24%}.compact-ui .placement-badge{left:24%}.compact-ui #minimap{max-height:none}}
+
+/* Interface appearance only: preserve the rendered world and game colors. */
+:root{--appearance-chrome:#123736;--appearance-line:#ffffff45;--appearance-panel:#ffffff20;--appearance-accent:#ffdc78}
+:root[data-theme="light"]{color-scheme:light;--appearance-chrome:#f5f0e4;--appearance-line:#25483d40;--appearance-panel:#d8e5d8;--appearance-accent:#214a3c}
+.game-appearance{display:flex;justify-content:flex-start;margin:16px 0 4px;color:inherit}
+.appearance-switcher {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: max-content;
+  padding: 2px;
+  border: 1px solid var(--appearance-line, var(--line, #8886));
+  border-radius: 28px;
+  color: inherit;
+}
+.appearance-switcher button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.appearance-switcher button:is(:hover, [aria-pressed="true"]) {
+  background: var(--appearance-panel, var(--panel, #8882));
+  color: var(--appearance-accent, var(--accent, currentColor));
+}
+.appearance-switcher button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.appearance-switcher svg {
+  width: 20px;
+  height: 20px;
+}
+@media print {
+  .appearance-switcher {
+    display: none;
+  }
+}
+
+
+:root{--appearance-chrome:#101a18;--appearance-line:var(--line);--appearance-panel:#d9bd8022;--appearance-accent:var(--gold)}
+.game-appearance{justify-content:center;margin:18px 0 0}
+:root[data-theme="light"]{--paper:#253b2d;--muted:#53634e;--gold:#865d22;--green:#4c713b;--red:#9c4638;--line:#76674055;--panel:#f8f3e7f5;--appearance-chrome:#f5f0e4;--appearance-panel:#e2dcc7;--appearance-accent:#724b1c}
+:root[data-theme="light"] :is(.topbar,.compact-ui .topbar){background:#f7f1e3f5;color:#253b2d;box-shadow:0 4px 20px #17250d20}
+:root[data-theme="light"] :is(.panel,.objectives,.modal,.compact-ui .objectives,.compact-ui .selection-panel,.compact-ui .action-panel,.compact-ui .minimap-panel,.compact-ui .mobile-dock,.compact-ui .mobile-selection){background:#f8f3e7f7;color:#253b2d;border-color:#9d8f67;box-shadow:0 10px 32px #16291130}
+:root[data-theme="light"] .modal-shade{background:#24342166}
+:root[data-theme="light"] .modal:before{border-color:#a28c5130}
+:root[data-theme="light"] :is(.modal h2,.modal h3,.control-table strong,.counter-table td:first-child,.tech-name){color:#354624}
+:root[data-theme="light"] :is(.modal p,.plain-button,.control-table,.counter-table,.objective-row,.selection-status,.health-numbers,.unit-details,.owner,.strategy-tip,.production-status,.action-pages,.mobile-action-info,.mobile-worker-rate){color:#526147}
+:root[data-theme="light"] .tip{color:#566f3d!important}
+:root[data-theme="light"] :is(.utility,.compact-ui .utilities #btn-pause,.compact-ui .utilities #btn-fullscreen,.mobile-overview,.compact-ui .mobile-overview,.compact-ui .camera-tools .utility,.cinematic-exit){background:#f7f1e4f2;color:#344b2d;border-color:#918361}
+:root[data-theme="light"] .utility:hover{background:#e5e0c9}
+:root[data-theme="light"] :is(.mobile-controls button,.action-pages button,.menu-tools button,.economy-strip button,.economy-caption button,.market-grid button){color:#394d2e;background:#e8e7d5;border-color:#79876880}
+:root[data-theme="light"] .mobile-controls button:is([aria-pressed="true"],[aria-expanded="true"]){background:#4f6540;color:#fff9e6;border-color:#4f6540}
+:root[data-theme="light"] .action{background:#f1ecdc;border-color:#8c946b60;color:#344d2e}
+:root[data-theme="light"] .action:is(:hover,.selected){background:#e1e5cd;border-color:#687a43}
+:root[data-theme="light"] .action svg{color:#806528}
+:root[data-theme="light"] :is(.action .action-name,.action.unavailable .action-name){color:#354c2d}
+:root[data-theme="light"] :is(.action .action-cost,.action .hotkey,.action-state,.action.unavailable .action-state){color:#5c684b}
+:root[data-theme="light"] .action.unavailable{background:#e9e5d8}
+:root[data-theme="light"] .tab:hover{color:#4a682f}
+:root[data-theme="light"] .objective-row.done{color:#3d6a31}
+:root[data-theme="light"] :is(.map-live,.map-bottom,.economy-caption,.age-path small){color:#4e6540}
+:root[data-theme="light"] :is(.tech-card,.market-grid>div,.age-path){background:#ecebd8;border-color:#81916870;color:#3e5131}
+:root[data-theme="light"] .tech-card:disabled{background:#e8e4d8;color:#6d7159}
+:root[data-theme="light"] .tech-card.researched{background:#dce9cc;border-color:#628650}
+:root[data-theme="light"] .tech-card:not(:disabled):hover{background:#e0e7cb;border-color:#718945}
+:root[data-theme="light"] :is(.tech-card small,.tech-card em,.tech-card .tech-reason){color:#59663f}
+:root[data-theme="light"] :is(.tech-card svg,.counter-table th,.market-grid svg){color:#806326}
+:root[data-theme="light"] :is(.toast,.wave-alert,.placement-badge,#tooltip){background:#f8f0ddf5;border-color:#8e814f;color:#42532f;text-shadow:none}
+:root[data-theme="light"] :is(.toast.bad,#tooltip em){color:#93422d}
+:root[data-theme="light"] :is(.wave-alert b,#tooltip strong,#tooltip small){color:#775322}
+:root[data-theme="light"] .brand-v{color:#82622c;text-shadow:none}
+:root[data-theme="light"] .gold-button{background:linear-gradient(140deg,#e4ca87,#ceb26b);border-color:#947230;color:#293421}
+:root[data-theme="light"] .gold-button:hover{background:#ebd49a}
+/* World labels, units, portraits and minimap keep their original game palette. */
+:root[data-theme="light"] :is(.world-label,.portrait,.world-heading,.loader){--gold:#d9bd80;--muted:#9baba1;--paper:#f3eee0}
+
 </style>
 </head>
 <body>
@@ -4690,7 +4961,7 @@ function selectInScreenBox(state,x,y,add=false){
  const list=units.filter(u=>{if(!u.alive||u.team||u.garrisoned)return false;const p=projected(u);return p.x>=x1&&p.x<=x2&&p.y>=y1&&p.y<=y2;});
  selectEntities(add?[...new Set([...selected,...list])]:list);sfx('select');
 }
-function creatorLinks(){return '<nav class="creator-links" data-creator-links aria-label="About the creator"><span>Created by Aaditya More</span><a href="https://aadityamore.com/" target="_blank" rel="noopener noreferrer">Website ↗</a><a href="https://github.com/aaditya-v-more" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/aadityavmore/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></nav>';}
+function creatorLinks(){return "<div class=\"game-appearance\"><div class=\"appearance-switcher\" role=\"group\" aria-label=\"Color theme\"><button type=\"button\" data-appearance-choice=\"light\" aria-label=\"Light mode\" title=\"Light mode\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42\"/></svg></button><button type=\"button\" data-appearance-choice=\"dark\" aria-label=\"Dark mode\" title=\"Dark mode\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20.8 13.2A8.7 8.7 0 0 1 10.8 3.2a8.8 8.8 0 1 0 10 10Z\"/></svg></button></div></div>"+'<nav class="creator-links" data-creator-links aria-label="About the creator"><span>Created by Aaditya More</span><a href="https://aadityamore.com/" target="_blank" rel="noopener noreferrer">Website ↗</a><a href="https://github.com/aaditya-v-more" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/aadityavmore/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></nav>';}
 const isFullscreen=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
 function syncFullscreen(){
  for(const id of ['btn-fullscreen','btn-menu-fullscreen']){const button=$(id);if(!button)continue;const label=isFullscreen()?'Exit fullscreen':'Enter fullscreen';button.setAttribute('aria-label',label);button.setAttribute('aria-pressed',String(isFullscreen()));button.title=label;if(id==='btn-menu-fullscreen')button.textContent=label;}
@@ -4760,7 +5031,7 @@ window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(e.target.ta
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{keys.clear();pointerState=null;touches.clear();$('selection-rectangle').style.display='none';});
 document.addEventListener('visibilitychange',()=>{keys.clear();if(document.hidden){if(!paused&&!ended)pauseGame();saveBattle();}});
 let focusBeforeModal=null;
-function showModal(html){keys.clear();hideTooltip();setMobilePanel('');focusBeforeModal=document.activeElement;const dismissible=!ended&&!saveBlocked&&!html.includes('btn-graphics-reload')&&!html.includes('btn-start');$('modal-content').innerHTML=(dismissible?'<button class="modal-close" id="modal-close" aria-label="Close panel">×</button>':'')+html+creatorLinks();if($('modal-close'))$('modal-close').onclick=resumeFromGesture;$('modal-shade').classList.add('open');$('modal-content').querySelector('button:not([disabled])')?.focus({preventScroll:true});}
+function showModal(html){keys.clear();hideTooltip();setMobilePanel('');focusBeforeModal=document.activeElement;const dismissible=!ended&&!saveBlocked&&!html.includes('btn-graphics-reload')&&!html.includes('btn-start');$('modal-content').innerHTML=(dismissible?'<button class="modal-close" id="modal-close" aria-label="Close panel">×</button>':'')+html+creatorLinks();window.AadityaAppearance?.refresh();if($('modal-close'))$('modal-close').onclick=resumeFromGesture;$('modal-shade').classList.add('open');$('modal-content').querySelector('button:not([disabled])')?.focus({preventScroll:true});}
 function closeModal(){$('modal-shade').classList.remove('open');if(focusBeforeModal?.isConnected)focusBeforeModal.focus();}
 function pauseGame(){if(ended)return;if(paused){resume();return;}paused=true;const saved=saveBattle();if(saveBlocked)return;showModal(`<svg class="icon modal-icon"><use href="#i-crown"/></svg><div class="eyebrow">THE EMERALD MARCH</div><h2 id="modal-title">A moment of peace.</h2><p>Your kingdom awaits your command.</p><p class="tip">${saved?'Battle saved in this browser. You can refresh or close this tab and resume later.':'Saving is unavailable. Keep this tab open to preserve your battle.'}</p><div class="modal-actions"><button class="gold-button" id="btn-resume">Resume the battle ${icon('play')}</button><button class="plain-button" id="btn-pause-help">Open the field guide</button><button class="plain-button" id="btn-pause-restart">Begin a new reign</button></div>${menuTools()}`);$('btn-resume').onclick=resumeFromGesture;wireMenuTools();$('btn-pause-help').onclick=help;$('btn-pause-restart').onclick=confirmNewBattle;}
 function resume(){if(ended||saveBlocked)return;paused=false;closeModal();if(pendingSound){pendingSound=false;if(!soundOn)toggleSound();}}

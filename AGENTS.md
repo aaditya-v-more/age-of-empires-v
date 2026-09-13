@@ -6,3 +6,5 @@
 - Keep creator navigation in menus, outside the active battlefield. Use one `data-creator-links` group with Website `https://aadityamore.com/`, GitHub `https://github.com/aaditya-v-more`, and LinkedIn `https://www.linkedin.com/in/aadityavmore/`. Preserve the `.modal-actions` collection-return integration hook.
 - Run `npm test` and `npm run build` after relevant changes. Add regression checks for changes to touch input, fullscreen, panel state, or save behavior; DOM tests do not replace real browser visual and touch-device checks.
 - Do not deploy or change hosting settings without task authorization. A push to main may trigger the repository's existing Vercel integration.
+
+- Preserve the embedded shared appearance runtime and sun/moon controls in menus. Use device appearance by default and the parent-domain manual preference on aadityamore.com. Keep both UI palettes readable, including compact panels, guides and technology menus; do not recolor the battlefield, units or minimap. Synchronize runtime changes with the portfolio source.
